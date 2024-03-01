@@ -4,6 +4,8 @@ const process = require('process');
 const {authenticate} = require('@google-cloud/local-auth');
 const {google} = require('googleapis');
 
+const presentationToAppendId = '1vEbi-ijqYpBgBx4R1IbSVXEPaI8Q5pFoGS12VRrQCq4'
+
 // If modifying these scopes, delete token.json.
 const SCOPES = ['https://www.googleapis.com/auth/presentations.readonly','https://www.googleapis.com/auth/drive'];
 // The file token.json stores the user's access and refresh tokens, and is
@@ -65,7 +67,6 @@ async function authorize() {
   return client;
 }
 
-
 /**
  * 
  * Only function worth looking at. Everything else is from google set up example
@@ -79,12 +80,20 @@ async function replaceText(auth) {
   const slidesApi = google.slides({version: 'v1', auth});
   const newPresentation = await driveApi.files.copy({
     fileId: presentationId,
-    requests: [{
-      name: newPresentationName,
-    }],
+    // resource: [{
+    //   name: newPresentationName,
+    // }],
   });
 
-  console.log('Created new presentation:', newPresentation.data.id);
+  const newPresentationForLayouts = await slidesApi.presentations.get({
+    presentationId: newPresentation.data.id,
+  })
+
+  // console.log('Created new presentation:', newPresentation.data.id);
+  // console.log({newPresentationLayouts: newPresentation.data.layouts.map(layout => layout.layoutProperties.name)});
+
+  const audioLayout = newPresentationForLayouts.data.layouts.find(layout => layout.layoutProperties.name === 'CUSTOM');
+  console.log('Audio layout:', audioLayout);
 
   const requests = [
     {
@@ -112,6 +121,22 @@ async function replaceText(auth) {
 
   console.log('Replaced text in presentation');
 
+  const addSlideRequests = [{
+    createSlide: {
+      slideLayoutReference: {
+        layoutId: newPresentationForLayouts.data.layouts.find(layout => layout.layoutProperties.displayName === 'AUDIO').objectId,
+      }
+    }
+  }]
+
+  const addSlideResponse = await slidesApi.presentations.batchUpdate({
+    presentationId: newPresentation.data.id,
+    resource: {requests: addSlideRequests},
+  });
+
+  console.log('Added slide to presentation');
+
+
   const pptVersion = await driveApi.files.export({
     fileId: newPresentation.data.id,
     mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
@@ -124,7 +149,7 @@ async function replaceText(auth) {
   console.log('Downloaded presentation as .pptx file');
 
   const deleteResponse = await driveApi.files.delete({
-    fileId: newPresentation.data.id,
+    fileId: newPresentationYep.data.id,
   });
 
   console.log('Deleted copy in drive');
