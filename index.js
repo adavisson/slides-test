@@ -76,25 +76,34 @@ async function replaceText(auth) {
   const presentationId = '11mx9C5Z8TGUAU1VOnXNtq7R37fj624HtAo1He37AaF8';
   const newPresentationName = 'My New Presentation';
 
+  /**
+   * INITIALIZE APIs
+   */
   const driveApi = google.drive({version: 'v3', auth});
   const slidesApi = google.slides({version: 'v1', auth});
   const newPresentation = await driveApi.files.copy({
     fileId: presentationId,
-    // resource: [{
-    //   name: newPresentationName,
-    // }],
   });
 
+
+  /**
+   * GET PRESENTATION FOR LAYOUTS
+   */
   const newPresentationForLayouts = await slidesApi.presentations.get({
     presentationId: newPresentation.data.id,
   })
 
-  // console.log('Created new presentation:', newPresentation.data.id);
-  // console.log({newPresentationLayouts: newPresentation.data.layouts.map(layout => layout.layoutProperties.name)});
 
+  /**
+   * FIND AUDIO LAYOUT
+   */
   const audioLayout = newPresentationForLayouts.data.layouts.find(layout => layout.layoutProperties.name === 'CUSTOM');
   console.log('Audio layout:', audioLayout);
 
+
+  /**
+   * UPDATE {{ placeholder-text }}
+   */
   const requests = [
     {
       replaceAllText: {
@@ -118,9 +127,12 @@ async function replaceText(auth) {
     presentationId: newPresentation.data.id,
     resource: {requests},
   });
-
   console.log('Replaced text in presentation');
 
+
+  /**
+   * ADD NEW SLIDE FROM CUSTOM TEMPLATE NAMED 'AUDIO'
+   */
   const addSlideRequests = [{
     createSlide: {
       slideLayoutReference: {
@@ -128,32 +140,32 @@ async function replaceText(auth) {
       }
     }
   }]
-
   const addSlideResponse = await slidesApi.presentations.batchUpdate({
     presentationId: newPresentation.data.id,
     resource: {requests: addSlideRequests},
   });
-
   console.log('Added slide to presentation');
 
 
+  /**
+   * EXPORT TO .PPTX file
+   */
   const pptVersion = await driveApi.files.export({
     fileId: newPresentation.data.id,
     mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
   }, {
     responseType: 'arraybuffer',
   });
-
   fs.writeFile('new-presentation.pptx', Buffer.from(pptVersion.data));
-
   console.log('Downloaded presentation as .pptx file');
 
+  /**
+   * DELETE COPY PRESENTATION FROM DRIVE
+   */
   const deleteResponse = await driveApi.files.delete({
     fileId: newPresentationYep.data.id,
   });
-
   console.log('Deleted copy in drive');
-
 }
 
 authorize().then(replaceText).catch(console.error);
