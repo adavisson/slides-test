@@ -10,7 +10,7 @@ const SCOPES = ['https://www.googleapis.com/auth/presentations.readonly','https:
 // created automatically when the authorization flow completes for the first
 // time.
 const TOKEN_PATH = path.join(process.cwd(), 'token.json');
-const CREDENTIALS_PATH = path.join(process.cwd(), 'credentials.json');
+// const CREDENTIALS_PATH = path.join(process.cwd(), 'credentials.json');
 
 /**
  * Reads previously authorized credentials from the save file.
@@ -47,18 +47,18 @@ async function loadSavedCredentialsIfExist() {
  * @param {OAuth2Client} client
  * @return {Promise<void>}
  */
-async function saveCredentials(client) {
-  const content = await fs.readFile(CREDENTIALS_PATH);
-  const keys = JSON.parse(content);
-  const key = keys.installed || keys.web;
-  const payload = JSON.stringify({
-    type: 'authorized_user',
-    client_id: key.client_id,
-    client_secret: key.client_secret,
-    refresh_token: client.credentials.refresh_token,
-  });
-  await fs.writeFile(TOKEN_PATH, payload);
-}
+// async function saveCredentials(client) {
+//   // const content = await fs.readFile(CREDENTIALS_PATH);
+//   const keys = JSON.parse(content);
+//   const key = keys.installed || keys.web;
+//   const payload = JSON.stringify({
+//     type: 'authorized_user',
+//     client_id: key.client_id,
+//     client_secret: key.client_secret,
+//     refresh_token: client.credentials.refresh_token,
+//   });
+//   await fs.writeFile(TOKEN_PATH, payload);
+// }
 
 /**
  * Load or request or authorization to call APIs.
@@ -69,13 +69,13 @@ async function authorize() {
   if (client) {
     return client;
   }
-  client = await authenticate({
-    scopes: SCOPES,
-    keyfilePath: CREDENTIALS_PATH,
-  });
-  if (client.credentials) {
-    await saveCredentials(client);
-  }
+  // client = await authenticate({
+  //   scopes: SCOPES,
+  //   keyfilePath: CREDENTIALS_PATH,
+  // });
+  // if (client.credentials) {
+  //   await saveCredentials(client);
+  // }
   return client;
 }
 
@@ -86,7 +86,6 @@ async function authorize() {
 async function replaceText(auth) {
   // id of template presentation
   const presentationId = '11mx9C5Z8TGUAU1VOnXNtq7R37fj624HtAo1He37AaF8';
-  const newPresentationName = 'My New Presentation';
 
   /**
    * INITIALIZE APIs
@@ -95,6 +94,9 @@ async function replaceText(auth) {
   const slidesApi = google.slides({version: 'v1', auth});
   const presentationCopy = await driveApi.files.copy({
     fileId: presentationId,
+    requestBody: {
+      name: "Advertiser 1"
+    }
   });
 
 
@@ -147,20 +149,18 @@ async function replaceText(auth) {
   const addSlideRequests = [{
     createSlide: {
       slideLayoutReference: {
+        // enum for display names of layouts
         layoutId: newPresentation.data.layouts.find(layout => layout.layoutProperties.displayName === 'AUDIO').objectId,
       },
-      placeholderIdMappings: [{
-        layoutPlaceholder: {
-          type: 'TITLE',
-          index: 0,
-        },
-        objectId: 'title',
-      }],
-    },
+    }
   }, {
-    insertText: {
-      objectId: 'title',
-      text: 'New Slide Baby',
+    replaceAllShapesWithImage: {
+      imageUrl: 'https://www.google.com/images/branding/googlelogo/2x/googlelogo_color_92x30dp.png',
+      replaceMethod: 'CENTER_INSIDE',
+      containsText: {
+        text: '{{ company-logo }}',
+        matchCase: true,
+      },
     },
   },]
   const addSlideResponse = await slidesApi.presentations.batchUpdate({
@@ -190,42 +190,42 @@ async function replaceText(auth) {
    * ADD LOGO TO ALL SLIDES
    */
   // refetch presentation to get all slide ids
-  const newPresentationForLogo = await slidesApi.presentations.get({
-    presentationId: newPresentation.data.presentationId,
-  })
-  const addLogoRequest = await Promise.all(newPresentationForLogo.data.slides.map(async slide => {
-    await slidesApi.presentations.batchUpdate({
-      presentationId: newPresentationForLogo.data.presentationId,
-      resource: {
-        requests: [{
-          createImage: {
-            elementProperties: {
-              pageObjectId: slide.objectId,
-              size: {
-                height: {
-                  magnitude: 50,
-                  unit: 'PT',
-                },
-                width: {
-                  magnitude: 50,
-                  unit: 'PT',
-                },
-              },
-              transform: {
-                scaleX: 1,
-                scaleY: 1,
-                translateX: 1,
-                translateY: 1,
-                unit: 'PT',
-              },
-            },
-            url: 'https://www.google.com/images/branding/googlelogo/2x/googlelogo_color_92x30dp.png',
-          },
-        }],
-      },
-    })
-  }))
-  console.log('Added logo to all slides');
+  // const newPresentationForLogo = await slidesApi.presentations.get({
+  //   presentationId: newPresentation.data.presentationId,
+  // })
+  // const addLogoRequest = await Promise.all(newPresentationForLogo.data.slides.map(async slide => {
+  //   await slidesApi.presentations.batchUpdate({
+  //     presentationId: newPresentationForLogo.data.presentationId,
+  //     resource: {
+  //       requests: [{
+  //         createImage: {
+  //           elementProperties: {
+  //             pageObjectId: slide.objectId,
+  //             size: {
+  //               height: {
+  //                 magnitude: 50,
+  //                 unit: 'PT',
+  //               },
+  //               width: {
+  //                 magnitude: 50,
+  //                 unit: 'PT',
+  //               },
+  //             },
+  //             transform: {
+  //               scaleX: 1,
+  //               scaleY: 1,
+  //               translateX: 1,
+  //               translateY: 1,
+  //               unit: 'PT',
+  //             },
+  //           },
+  //           url: 'https://www.google.com/images/branding/googlelogo/2x/googlelogo_color_92x30dp.png',
+  //         },
+  //       }],
+  //     },
+  //   })
+  // }))
+  // console.log('Added logo to all slides');
 
   /**
    * EXPORT TO .PPTX file
