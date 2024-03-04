@@ -4,8 +4,6 @@ const process = require('process');
 const {authenticate} = require('@google-cloud/local-auth');
 const {google} = require('googleapis');
 
-const presentationToAppendId = '1vEbi-ijqYpBgBx4R1IbSVXEPaI8Q5pFoGS12VRrQCq4'
-
 // If modifying these scopes, delete token.json.
 const SCOPES = ['https://www.googleapis.com/auth/presentations.readonly','https://www.googleapis.com/auth/drive'];
 // The file token.json stores the user's access and refresh tokens, and is
@@ -21,16 +19,30 @@ const CREDENTIALS_PATH = path.join(process.cwd(), 'credentials.json');
  */
 async function loadSavedCredentialsIfExist() {
   try {
-    const content = await fs.readFile(TOKEN_PATH);
-    const credentials = JSON.parse(content);
-    return google.auth.fromJSON(credentials);
+    /**
+     * AUTH A USER
+     */
+    // const content = await fs.readFile(TOKEN_PATH);
+    // const credentials = JSON.parse(content);
+    // return google.auth.fromJSON(credentials, {
+    //   scopes: SCOPES,
+    // });
+
+    /**
+     * SERVICE ACCOUNT
+     */
+    const auth = new google.auth.GoogleAuth({
+      keyFile: TOKEN_PATH,
+      scopes: SCOPES,
+    })
+    return auth
   } catch (err) {
     return null;
   }
 }
 
 /**
- * Serializes credentials to a file comptible with GoogleAUth.fromJSON.
+ * Serializes credentials to a file compatible with GoogleAUth.fromJSON.
  *
  * @param {OAuth2Client} client
  * @return {Promise<void>}
@@ -81,7 +93,7 @@ async function replaceText(auth) {
    */
   const driveApi = google.drive({version: 'v3', auth});
   const slidesApi = google.slides({version: 'v1', auth});
-  const newPresentation = await driveApi.files.copy({
+  const presentationCopy = await driveApi.files.copy({
     fileId: presentationId,
   });
 
@@ -89,16 +101,15 @@ async function replaceText(auth) {
   /**
    * GET PRESENTATION FOR LAYOUTS
    */
-  const newPresentationForLayouts = await slidesApi.presentations.get({
-    presentationId: newPresentation.data.id,
+  const newPresentation = await slidesApi.presentations.get({
+    presentationId: presentationCopy.data.id,
   })
 
 
   /**
    * FIND AUDIO LAYOUT
    */
-  const audioLayout = newPresentationForLayouts.data.layouts.find(layout => layout.layoutProperties.name === 'CUSTOM');
-  console.log('Audio layout:', audioLayout);
+  const audioLayout = newPresentation.data.layouts.find(layout => layout.layoutProperties.displayName === 'AUDIO');
 
 
   /**
@@ -124,7 +135,7 @@ async function replaceText(auth) {
     }
   ]
   const updateResponse = await slidesApi.presentations.batchUpdate({
-    presentationId: newPresentation.data.id,
+    presentationId: newPresentation.data.presentationId,
     resource: {requests},
   });
   console.log('Replaced text in presentation');
@@ -136,22 +147,39 @@ async function replaceText(auth) {
   const addSlideRequests = [{
     createSlide: {
       slideLayoutReference: {
-        layoutId: newPresentationForLayouts.data.layouts.find(layout => layout.layoutProperties.displayName === 'AUDIO').objectId,
+        layoutId: newPresentation.data.layouts.find(layout => layout.layoutProperties.displayName === 'AUDIO').objectId,
       }
     }
   }]
   const addSlideResponse = await slidesApi.presentations.batchUpdate({
-    presentationId: newPresentation.data.id,
+    presentationId: newPresentation.data.presentationId,
     resource: {requests: addSlideRequests},
   });
   console.log('Added slide to presentation');
 
 
   /**
+   * DELETE CUSTOM LAYOUTS FROM COPY
+   * (Can not delete layouts that have been used in the presentation)
+   */
+  const deleteLayoutRequests = slidesApi.presentations.batchUpdate({
+    presentationId: newPresentation.data.presentationId,
+    resource: {
+      requests: newPresentation.data.layouts
+        .filter(layout => layout.layoutProperties.displayName === 'AUDIO')
+        .map(layout => ({
+          deleteObject: {objectId: layout.objectId},
+        })),
+    },
+  });
+  
+
+
+  /**
    * EXPORT TO .PPTX file
    */
   const pptVersion = await driveApi.files.export({
-    fileId: newPresentation.data.id,
+    fileId: newPresentation.data.presentationId,
     mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
   }, {
     responseType: 'arraybuffer',
@@ -159,11 +187,12 @@ async function replaceText(auth) {
   fs.writeFile('new-presentation.pptx', Buffer.from(pptVersion.data));
   console.log('Downloaded presentation as .pptx file');
 
+
   /**
    * DELETE COPY PRESENTATION FROM DRIVE
    */
   const deleteResponse = await driveApi.files.delete({
-    fileId: newPresentationYep.data.id,
+    fileId: newPresentation.data.presentationId
   });
   console.log('Deleted copy in drive');
 }
