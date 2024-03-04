@@ -148,9 +148,21 @@ async function replaceText(auth) {
     createSlide: {
       slideLayoutReference: {
         layoutId: newPresentation.data.layouts.find(layout => layout.layoutProperties.displayName === 'AUDIO').objectId,
-      }
-    }
-  }]
+      },
+      placeholderIdMappings: [{
+        layoutPlaceholder: {
+          type: 'TITLE',
+          index: 0,
+        },
+        objectId: 'title',
+      }],
+    },
+  }, {
+    insertText: {
+      objectId: 'title',
+      text: 'New Slide Baby',
+    },
+  },]
   const addSlideResponse = await slidesApi.presentations.batchUpdate({
     presentationId: newPresentation.data.presentationId,
     resource: {requests: addSlideRequests},
@@ -162,18 +174,58 @@ async function replaceText(auth) {
    * DELETE CUSTOM LAYOUTS FROM COPY
    * (Can not delete layouts that have been used in the presentation)
    */
-  const deleteLayoutRequests = slidesApi.presentations.batchUpdate({
-    presentationId: newPresentation.data.presentationId,
-    resource: {
-      requests: newPresentation.data.layouts
-        .filter(layout => layout.layoutProperties.displayName === 'AUDIO')
-        .map(layout => ({
-          deleteObject: {objectId: layout.objectId},
-        })),
-    },
-  });
+  // const deleteLayoutRequests = slidesApi.presentations.batchUpdate({
+  //   presentationId: newPresentation.data.presentationId,
+  //   resource: {
+  //     requests: newPresentation.data.layouts
+  //       .filter(layout => layout.layoutProperties.displayName === 'AUDIO')
+  //       .map(layout => ({
+  //         deleteObject: {objectId: layout.objectId},
+  //       })),
+  //   },
+  // });
   
 
+  /**
+   * ADD LOGO TO ALL SLIDES
+   */
+  // refetch presentation to get all slide ids
+  const newPresentationForLogo = await slidesApi.presentations.get({
+    presentationId: newPresentation.data.presentationId,
+  })
+  const addLogoRequest = await Promise.all(newPresentationForLogo.data.slides.map(async slide => {
+    await slidesApi.presentations.batchUpdate({
+      presentationId: newPresentationForLogo.data.presentationId,
+      resource: {
+        requests: [{
+          createImage: {
+            elementProperties: {
+              pageObjectId: slide.objectId,
+              size: {
+                height: {
+                  magnitude: 50,
+                  unit: 'PT',
+                },
+                width: {
+                  magnitude: 50,
+                  unit: 'PT',
+                },
+              },
+              transform: {
+                scaleX: 1,
+                scaleY: 1,
+                translateX: 1,
+                translateY: 1,
+                unit: 'PT',
+              },
+            },
+            url: 'https://www.google.com/images/branding/googlelogo/2x/googlelogo_color_92x30dp.png',
+          },
+        }],
+      },
+    })
+  }))
+  console.log('Added logo to all slides');
 
   /**
    * EXPORT TO .PPTX file
