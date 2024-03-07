@@ -92,12 +92,24 @@ async function replaceText(auth) {
    */
   const driveApi = google.drive({version: 'v3', auth});
   const slidesApi = google.slides({version: 'v1', auth});
+  const sheetsApi = google.sheets({version: 'v4', auth});
   const presentationCopy = await driveApi.files.copy({
     fileId: presentationId,
     requestBody: {
       name: "Advertiser 1"
-    }
+    },
+    fields: 'id, parents'
   });
+
+  const newSheet = await driveApi.files.create({
+    resource: {
+      mimeType: 'application/vnd.google-apps.spreadsheet',
+      parents: [presentationCopy.data.parents[0]],
+    }
+  })
+  const sheetsDoc = await sheetsApi.spreadsheets.get({
+    spreadsheetId: newSheet.data.id,
+  })
 
 
   /**
@@ -106,7 +118,7 @@ async function replaceText(auth) {
   const newPresentation = await slidesApi.presentations.get({
     presentationId: presentationCopy.data.id,
   })
-
+  
 
   /**
    * FIND AUDIO LAYOUT
@@ -156,7 +168,7 @@ async function replaceText(auth) {
   }, {
     replaceAllShapesWithImage: {
       imageUrl: 'https://www.google.com/images/branding/googlelogo/2x/googlelogo_color_92x30dp.png',
-      replaceMethod: 'CENTER_INSIDE',
+      imageReplaceMethod: 'CENTER_INSIDE',
       containsText: {
         text: '{{ company-logo }}',
         matchCase: true,
